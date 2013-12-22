@@ -8,6 +8,7 @@ describe('jBone Event', function() {
         expect(jBone().trigger).to.be.a('function');
         expect(jBone().off).to.be.a('function');
         expect(jBone().on).to.be.a('function');
+        expect(jBone().one).to.be.a('function');
     });
 
     it('on() off() trigger() initialized', function() {
@@ -143,6 +144,22 @@ describe('jBone Event', function() {
 
         expectedTartget = a.find('.target')[0];
         a.find('.target').eq(0).trigger('click');
+    });
+
+    it('on(event, target, callback) preventDefault', function() {
+        var a = jBone('<div><span></span></div>'),
+            counter = 0;
+
+        jBone('#app').html(a);
+
+        a.on('click', 'span', function(e) {
+            expect(e.defaultPrevented).be.eql(false);
+            e.preventDefault();
+
+            expect(e.defaultPrevented).be.eql(true);
+        });
+
+        a.find('span').trigger('click');
     });
 
     it('one(event, callback)', function() {
@@ -334,6 +351,31 @@ describe('jBone Event', function() {
         div.off('foo bar');
         div.trigger('foo bar');
         expect(counter).be.eql(3);
+    });
+
+    it('off should remove event handlers from cache', function() {
+        var div = jBone('<div>'),
+            fn = function() {};
+
+        div.on('click', fn);
+
+        expect(jBone._cache.events[jBone.getData(div).jid].click[0].originfn).be.eql(fn);
+
+        div.off('click');
+
+        expect(jBone._cache.events[jBone.getData(div).jid].click[0]).be.eql(undefined);
+
+        div.on('click.test', fn);
+        div.off('click', function() {});
+        div.off('click.test', function() {});
+        div.off('.test', function() {});
+        div.off('.namespace');
+
+        expect(jBone._cache.events[jBone.getData(div).jid].click[1]).to.be.an('object');
+
+        div.off('.test');
+
+        expect(jBone._cache.events[jBone.getData(div).jid].click[1]).be.eql(undefined);
     });
 
 });

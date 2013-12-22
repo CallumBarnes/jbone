@@ -9,7 +9,7 @@ function BoneEvent(e, data) {
                 this.defaultPrevented = true;
                 return e[key]();
             };
-        } else if (typeof e[key] === "function") {
+        } else if (isFunction(e[key])) {
             this[key] = function() {
                 return e[key]();
             };
@@ -19,7 +19,9 @@ function BoneEvent(e, data) {
     };
 
     for (key in e) {
-        setter.call(this, key, e);
+        if (e.hasOwnProperty(key) || typeof e[key] === "function") {
+            setter.call(this, key, e);
+        }
     }
 
     jBone.extend(this, data);
@@ -49,7 +51,9 @@ jBone.Event = function(event, data) {
 
 jBone.fn.on = function(event) {
     var args = arguments,
-        callback, target, namespace, fn, events, eventType, expectedTarget;
+        length = this.length,
+        i = 0,
+        callback, target, namespace, fn, events, eventType, expectedTarget, addListener;
 
     if (args.length === 2) {
         callback = args[1];
@@ -57,7 +61,7 @@ jBone.fn.on = function(event) {
         target = args[1], callback = args[2];
     }
 
-    this.forEach(function(el) {
+    addListener = function(el) {
         jBone.setId(el);
         events = jBone.getData(el).events;
         event.split(" ").forEach(function(event) {
@@ -91,14 +95,20 @@ jBone.fn.on = function(event) {
 
             el.addEventListener && el.addEventListener(eventType, fn, false);
         });
-    });
+    };
+
+    for (; i < length; i++) {
+        addListener(this[i]);
+    }
 
     return this;
 };
 
-jBone.fn.one = function() {
-    var event = arguments[0], args = arguments,
-        callback, target;
+jBone.fn.one = function(event) {
+    var args = arguments,
+        i = 0,
+        length = this.length,
+        callback, target, addListener;
 
     if (args.length === 2) {
         callback = args[1];
@@ -106,7 +116,7 @@ jBone.fn.one = function() {
         target = args[1], callback = args[2];
     }
 
-    this.forEach(function(el) {
+    addListener = function(el) {
         event.split(" ").forEach(function(event) {
             var fn = function(e) {
                 jBone(el).off(event, fn);
@@ -119,13 +129,20 @@ jBone.fn.one = function() {
                 jBone(el).on(event, target, fn);
             }
         });
-    });
+    };
+
+    for (; i < length; i++) {
+        addListener(this[i]);
+    }
 
     return this;
 };
 
 jBone.fn.trigger = function(event) {
-    var events = [];
+    var events = [],
+        i = 0,
+        length = this.length,
+        dispatchEvents;
 
     if (!event) {
         return this;
@@ -140,7 +157,7 @@ jBone.fn.trigger = function(event) {
         events = [event];
     }
 
-    this.forEach(function(el) {
+    dispatchEvents = function(el) {
         events.forEach(function(event) {
             if (!event.type) {
                 return;
@@ -148,22 +165,36 @@ jBone.fn.trigger = function(event) {
 
             el.dispatchEvent && el.dispatchEvent(event);
         });
-    });
+    };
+
+    for (; i < length; i++) {
+        dispatchEvents(this[i]);
+    }
 
     return this;
 };
 
 jBone.fn.off = function(event, fn) {
-    var events, callback, namespace, eventType,
-        getCallback = function(e) {
-            if (fn && e.originfn === fn) {
-                return e.fn;
-            } else if (!fn) {
-                return e.fn;
-            }
-        };
+    var i = 0,
+        length = this.length,
+        removeListener = function(events, eventType, index, el, e) {
+            var callback;
 
-    this.forEach(function(el) {
+            // get callback
+            if ((fn && e.originfn === fn) || !fn) {
+                callback = e.fn;
+            }
+
+            if (events[eventType][index].fn === callback) {
+                el.removeEventListener(eventType, callback);
+
+                // remove handler from cache
+                delete jBone._cache.events[jBone.getData(el).jid][eventType][index];
+            }
+        },
+        events, namespace, eventType, removeListeners;
+
+    removeListeners = function(el) {
         events = jBone.getData(el).events;
 
         if (!events) {
@@ -176,26 +207,28 @@ jBone.fn.off = function(event, fn) {
 
             // remove named events
             if (events[eventType]) {
-                events[eventType].forEach(function(e) {
-                    callback = getCallback(e);
+                events[eventType].forEach(function(e, index) {
                     if (!namespace || (namespace && e.namespace === namespace)) {
-                        el.removeEventListener(eventType, callback);
+                        removeListener(events, eventType, index, el, e);
                     }
                 });
             }
             // remove all namespaced events
             else if (namespace) {
-                keys(events).forEach(function(key) {
-                    events[key].forEach(function(e) {
-                        callback = getCallback(e);
+                keys(events).forEach(function(eventType) {
+                    events[eventType].forEach(function(e, index) {
                         if (e.namespace.split(".")[0] === namespace.split(".")[0]) {
-                            el.removeEventListener(key, callback);
+                            removeListener(events, eventType, index, el, e);
                         }
                     });
                 });
             }
         });
-    });
+    };
+
+    for (; i < length; i++) {
+        removeListeners(this[i]);
+    }
 
     return this;
 };
